@@ -8,6 +8,8 @@ PROFESORES = []
 class AlumnoViewSet(viewsets.ViewSet):
 
     def list(self, request):
+        if len(ALUMNOS) == 0:
+            return Response({"message": "application/json []"}, status=200)
         return Response(ALUMNOS)
 
     def create(self, request):
