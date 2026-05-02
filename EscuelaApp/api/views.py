@@ -1,22 +1,59 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from EscuelaApp.models import Alumnos, Profesores
 from EscuelaApp.api.serializer import AlumnoSerializer, ProfesorSerializer
-import json
-import os
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+import boto3
+import uuid
 
-FILE_ALUMNOS = "alumnos.json"
-FILE_PROFESORES = "profesores.json"
+class AlumnoViewSet(viewsets.ModelViewSet):
+    queryset = Alumnos.objects.all()
+    serializer_class = AlumnoSerializer
 
-def read_file(FILE_PATH):
-    if not os.path.exists(FILE_PATH):
-        return []
-    with open(FILE_PATH, "r") as f:
-        return json.load(f)
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_200_OK)
 
-def write_file(FILE_PATH,data):
-    with open(FILE_PATH, "w") as f:
-        json.dump(data, f)
+    @action(detail=True, methods=['post'], url_path='fotoPerfil', parser_classes=[MultiPartParser, FormParser])
+    def fotoPerfil(self, request, pk=None):
+        file = request.FILES.get('foto')
+        if not file:
+            return Response({"error": "No se envió archivo"}, status=400)
 
+        s3 = boto3.client('s3')
+        bucket_name = '18003912-proyecto'
+        filename = f"alumnos/{pk}/{uuid.uuid4()}_{file.name}"
+
+        s3.upload_fileobj(
+            file,
+            bucket_name,
+            filename,
+            ExtraArgs={'ContentType': file.content_type}
+        )
+
+        url = f"https://{bucket_name}.s3.amazonaws.com/{filename}"
+
+        alumno = self.get_object()
+        alumno.foto_perfil = url
+        alumno.save()
+
+        return Response({"url": url}, status=200)
+
+
+
+class ProfesorViewSet(viewsets.ModelViewSet):
+    queryset = Profesores.objects.all()
+    serializer_class = ProfesorSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_200_OK)
+
+'''
 class AlumnoViewSet(viewsets.ViewSet):
 
     def list(self, request):
@@ -149,3 +186,4 @@ class ProfesorViewSet(viewsets.ViewSet):
                 return Response(status=200)
 
         return Response({"error": "No encontrado"}, status=404)
+'''
