@@ -37,10 +37,10 @@ class AlumnoViewSet(viewsets.ModelViewSet):
         url = f"https://{bucket_name}.s3.amazonaws.com/{filename}"
 
         alumno = self.get_object()
-        alumno.foto_perfil = url
+        alumno.fotoPerfilUrl = url
         alumno.save()
 
-        return Response({"url": url}, status=200)
+        return Response({"fotoPerfilUrl": url}, status=200)
 
 
 
