@@ -42,6 +42,35 @@ class AlumnoViewSet(viewsets.ModelViewSet):
 
         return Response({"fotoPerfilUrl": url}, status=200)
 
+    @action(detail=True, methods=['post'], url_path='email')
+    def email(self, request, pk=None):
+        alumno = self.get_object()
+
+        mensaje = f"""
+            Alumno: {alumno.id}
+            Nombre: {alumno.nombres} {alumno.apellidos}
+            Matrícula: {alumno.matricula}
+            Promedio: {alumno.promedio}
+            """
+
+        try:
+            sns = boto3.client('sns', region_name='us-east-1')
+
+            response = sns.publish(
+                TopicArn='arn:aws:sns:us-east-1:943587461590:AlumnosTopic',
+                Message=mensaje,
+                Subject='Información del alumno'
+            )
+
+            return Response({
+                "message": "Mensaje enviado",
+                "messageId": response.get('MessageId')
+            }, status=200)
+
+        except Exception as e:
+            return Response({
+                "error": str(e)
+            }, status=500)
 
 
 class ProfesorViewSet(viewsets.ModelViewSet):
