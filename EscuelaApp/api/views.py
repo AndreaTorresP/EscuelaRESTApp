@@ -1,6 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from EscuelaApp.models import Alumnos, Profesores, AlumnoSession
+from EscuelaApp.models import Alumnos, Profesores
 from EscuelaApp.api.serializer import AlumnoSerializer, ProfesorSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
