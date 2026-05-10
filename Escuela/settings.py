@@ -76,16 +76,16 @@ WSGI_APPLICATION = 'Escuela.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
-    'session': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'session.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'escuela_mysql',
+        'USER': 'admin',
+        'PASSWORD': 'ajXbfD3icB4vBBW',
+        'HOST': 'escuela-mysql.c8cq0pwcxsjb.us-east-1.rds.amazonaws.com',
+        'PORT': '3306',
     }
 }
 
-DATABASE_ROUTERS = ['Escuela.database_routers.auth_router.AuthRouter']
+#DATABASE_ROUTERS = ['Escuela.database_routers.auth_router.AuthRouter']
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

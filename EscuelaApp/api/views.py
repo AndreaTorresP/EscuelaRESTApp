@@ -93,19 +93,26 @@ class AlumnoViewSet(viewsets.ModelViewSet):
                 {"error": "Credenciales inválidas"},
                 status=400
             )
+        
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        table = dynamodb.Table('sesiones_alumnos')
 
+        session_id = str(uuid.uuid4())
         session_string = secrets.token_hex(64)
-
-        session = AlumnoSession.objects.using('session').create(
-            fecha=int(time.time()),
-            alumnoId=alumno.id,
-            active=True,
-            sessionString=session_string
+        
+        table.put_item(
+            Item={
+                'sessionString': session_string,
+                'id': session_id,
+                'fecha': int(time.time()),
+                'alumnoId': int(pk),
+                'active': True
+            }
         )
 
         return Response({
-            "sessionId": str(session.id),
-            "sessionString": session.sessionString
+            "sessionId": session_id,
+            "sessionString": session_string
         }, status=200)
 
     @action(detail=True, methods=['post'], url_path='session/verify')
@@ -113,23 +120,27 @@ class AlumnoViewSet(viewsets.ModelViewSet):
 
         session_string = request.data.get('sessionString')
 
-        if not session_string:
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        table = dynamodb.Table('sesiones_alumnos')
+
+        response = table.get_item(
+            Key={
+                'sessionString': session_string
+            }
+        )
+        item = response.get('Item')
+
+        if not item:
             return Response(
                 {"error": "sessionString requerido"},
                 status=400
             )
-
-        session = AlumnoSession.objects.using('session').filter(
-            alumnoId=pk,
-            sessionString=session_string,
-            active=True
-        ).first()
-
-        if not session:
-            return Response(
-                {"valid": False},
-                status=400
-            )
+        
+        if item['alumnoId'] != int(pk):
+            return Response({"error": "Alumno incorrecto"}, status=400)
+        
+        if not item['active']:
+            return Response({"error": "Sesión no activa"}, status=400)
 
         return Response({
             "valid": True
@@ -140,25 +151,30 @@ class AlumnoViewSet(viewsets.ModelViewSet):
 
         session_string = request.data.get('sessionString')
 
-        if not session_string:
-            return Response(
-                {"error": "sessionString requerido"},
-                status=400
-            )
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        table = dynamodb.Table('sesiones_alumnos')
 
-        session = AlumnoSession.objects.using('session').filter(
-            alumnoId=pk,
-            sessionString=session_string,
-            active=True
-        ).first()
+        response = table.get_item(
+            Key={
+                'sessionString': session_string
+            }
+        )
+        item = response.get('Item')
 
-        if not session:
+        if not item:
             return Response(
                 {"error": "Sesión inválida"}
             , status=400)
 
-        session.active = False
-        session.save(using='session')
+        table.update_item(
+            Key={
+                'sessionString': session_string
+            },
+            UpdateExpression="SET active = :a",
+            ExpressionAttributeValues={
+                ':a': False
+            }
+        )
 
         return Response({
             "message": "Sesión cerrada"
