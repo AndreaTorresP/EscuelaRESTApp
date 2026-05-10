@@ -1,12 +1,14 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from EscuelaApp.models import Alumnos, Profesores
+from EscuelaApp.models import Alumnos, Profesores, AlumnoSession
 from EscuelaApp.api.serializer import AlumnoSerializer, ProfesorSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 import boto3
 import uuid
+import time
+import secrets
 
 class AlumnoViewSet(viewsets.ModelViewSet):
     queryset = Alumnos.objects.all()
@@ -47,7 +49,7 @@ class AlumnoViewSet(viewsets.ModelViewSet):
         alumno = self.get_object()
 
         mensaje = f"""
-            Alumno: {alumno.id}
+            AlumnoId: {alumno.id}
             Nombre: {alumno.nombres} {alumno.apellidos}
             Matrícula: {alumno.matricula}
             Promedio: {alumno.promedio}
@@ -72,6 +74,95 @@ class AlumnoViewSet(viewsets.ModelViewSet):
                 "error": str(e)
             }, status=500)
 
+    @action(detail=True, methods=['post'], url_path='session/login')
+    def login(self, request, pk=None):
+
+        password = request.data.get('password')
+
+        if not password:
+            return Response(
+                {"error": "Password requerida"},
+                status=400
+            )
+
+        alumno = self.get_object()
+
+        # Comparación simple
+        if alumno.password != password:
+            return Response(
+                {"error": "Credenciales inválidas"},
+                status=400
+            )
+
+        session_string = secrets.token_hex(64)
+
+        session = AlumnoSession.objects.using('session').create(
+            fecha=int(time.time()),
+            alumnoId=alumno.id,
+            active=True,
+            sessionString=session_string
+        )
+
+        return Response({
+            "sessionId": str(session.id),
+            "sessionString": session.sessionString
+        }, status=200)
+
+    @action(detail=True, methods=['post'], url_path='session/verify')
+    def verify(self, request, pk=None):
+
+        session_string = request.data.get('sessionString')
+
+        if not session_string:
+            return Response(
+                {"error": "sessionString requerido"},
+                status=400
+            )
+
+        session = AlumnoSession.objects.using('session').filter(
+            alumnoId=pk,
+            sessionString=session_string,
+            active=True
+        ).first()
+
+        if not session:
+            return Response(
+                {"valid": False},
+                status=400
+            )
+
+        return Response({
+            "valid": True
+        }, status=200)
+
+    @action(detail=True, methods=['post'], url_path='session/logout')
+    def logout(self, request, pk=None):
+
+        session_string = request.data.get('sessionString')
+
+        if not session_string:
+            return Response(
+                {"error": "sessionString requerido"},
+                status=400
+            )
+
+        session = AlumnoSession.objects.using('session').filter(
+            alumnoId=pk,
+            sessionString=session_string,
+            active=True
+        ).first()
+
+        if not session:
+            return Response(
+                {"error": "Sesión inválida"}
+            , status=400)
+
+        session.active = False
+        session.save(using='session')
+
+        return Response({
+            "message": "Sesión cerrada"
+        }, status=200)
 
 class ProfesorViewSet(viewsets.ModelViewSet):
     queryset = Profesores.objects.all()
@@ -81,138 +172,3 @@ class ProfesorViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         self.perform_destroy(instance)
         return Response(status=status.HTTP_200_OK)
-
-'''
-class AlumnoViewSet(viewsets.ViewSet):
-
-    def list(self, request):
-        ALUMNOS = read_file(FILE_ALUMNOS)
-        if len(ALUMNOS) == 0:
-            return Response({"message": "application/json []"}, status=200)
-        return Response(ALUMNOS)
-
-    def create(self, request):
-        ALUMNOS = read_file(FILE_ALUMNOS)
-
-        serializer = AlumnoSerializer(data=request.data)
-
-        if serializer.is_valid():
-            new_item = serializer.validated_data
-            
-            if "id" in request.data:
-                new_item["id"] = request.data["id"]
-            else:
-                new_item["id"] = len(ALUMNOS) + 1
-
-            ALUMNOS.append(new_item)
-            write_file(FILE_ALUMNOS, ALUMNOS)
-
-            return Response(new_item, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=400)
-
-    def retrieve(self, request, pk=None):
-        ALUMNOS = read_file(FILE_ALUMNOS)
-
-        for item in ALUMNOS:
-            if int(item["id"]) == int(pk):
-                return Response(item)
-        return Response({"error": "No encontrado"}, status=404)
-
-    def update(self, request, pk=None):
-        ALUMNOS = read_file(FILE_ALUMNOS)
-
-        for i, item in enumerate(ALUMNOS):
-            if int(item["id"]) == int(pk):
-                serializer = AlumnoSerializer(data=request.data)
-
-                if serializer.is_valid():
-                    updated = serializer.validated_data
-                    updated["id"] = item["id"]
-                    ALUMNOS[i] = updated
-                    write_file(FILE_ALUMNOS, ALUMNOS)
-                    
-                    return Response(updated, status=200)
-
-                return Response(serializer.errors, status=400)
-
-        return Response({"error": "No encontrado"}, status=404)
-
-    def destroy(self, request, pk=None):
-        ALUMNOS = read_file(FILE_ALUMNOS)
-
-        for item in ALUMNOS:
-            if int(item["id"]) == int(pk):
-                ALUMNOS = [a for a in ALUMNOS if int(a["id"]) != int(pk)]
-                write_file(FILE_ALUMNOS, ALUMNOS)
-
-                return Response(status=200)
-
-        return Response({"error": "No encontrado"}, status=404)
-
-class ProfesorViewSet(viewsets.ViewSet):
-
-    def list(self, request):
-        PROFESORES = read_file(FILE_PROFESORES)
-        if len(PROFESORES) == 0:
-            return Response({"message": "application/json []"}, status=200)
-        return Response(PROFESORES)
-
-    def create(self, request):
-        PROFESORES = read_file(FILE_PROFESORES)
-
-        serializer = ProfesorSerializer(data=request.data)
-
-        if serializer.is_valid():
-            new_item = serializer.validated_data
-            
-            if "id" in request.data:
-                new_item["id"] = request.data["id"]
-            else:
-                new_item["id"] = len(PROFESORES) + 1
-
-            PROFESORES.append(new_item)
-            write_file(FILE_PROFESORES, PROFESORES)
-            return Response(new_item, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=400)
-
-    def retrieve(self, request, pk=None):
-        PROFESORES = read_file(FILE_PROFESORES)
-
-        for item in PROFESORES:
-            if int(item["id"]) == int(pk):
-                return Response(item)
-        return Response({"error": "No encontrado"}, status=404)
-
-    def update(self, request, pk=None):
-        PROFESORES = read_file(FILE_PROFESORES)
-
-        for i, item in enumerate(PROFESORES):
-            if int(item["id"]) == int(pk):
-                serializer = ProfesorSerializer(data=request.data)
-
-                if serializer.is_valid():
-                    updated = serializer.validated_data
-                    updated["id"] = item["id"]
-                    PROFESORES[i] = updated
-                    write_file(FILE_PROFESORES, PROFESORES)
-
-                    return Response(updated, status=200)
-
-                return Response(serializer.errors, status=400)
-
-        return Response({"error": "No encontrado"}, status=404)
-
-    def destroy(self, request, pk=None):
-        PROFESORES = read_file(FILE_PROFESORES)
-
-        for item in PROFESORES:
-            if int(item["id"]) == int(pk):
-                PROFESORES = [a for a in PROFESORES if int(a["id"]) != int(pk)]
-                write_file(FILE_PROFESORES, PROFESORES)
-                
-                return Response(status=200)
-
-        return Response({"error": "No encontrado"}, status=404)
-'''
